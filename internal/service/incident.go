@@ -208,7 +208,13 @@ func (s *IncidentService) acknowledge(ctx context.Context, inc *model.Incident, 
 	now := time.Now()
 	inc.Status = model.IncidentAcknowledged
 	inc.AcknowledgedAt = &now
-	inc.NextEscalationAt = nil // ack halts escalation
+	// Ack halts escalation — unless the service sets an ack timeout, in which
+	// case the incident re-escalates if it isn't resolved within that window.
+	inc.NextEscalationAt = nil
+	if svc, _ := s.services.FindByID(ctx, inc.ServiceID, inc.OrganizationID); svc != nil && svc.AckTimeoutMinutes != nil {
+		deadline := now.Add(time.Duration(*svc.AckTimeoutMinutes) * time.Minute)
+		inc.NextEscalationAt = &deadline
+	}
 	if userID != nil {
 		inc.AssignedUserID = userID
 	}
@@ -291,7 +297,7 @@ func (s *IncidentService) escalateCurrentLevel(ctx context.Context, inc *model.I
 // exhausts the policy). Called by the background worker when next_escalation_at
 // passes.
 func (s *IncidentService) Escalate(ctx context.Context, inc *model.Incident) error {
-	if inc.Status != model.IncidentTriggered || inc.EscalationPolicyID == nil {
+	if inc.Status == model.IncidentResolved || inc.EscalationPolicyID == nil {
 		inc.NextEscalationAt = nil
 		return s.incidents.Update(ctx, inc)
 	}
@@ -302,6 +308,15 @@ func (s *IncidentService) Escalate(ctx context.Context, inc *model.Incident) err
 	if policy == nil || len(policy.Rules) == 0 {
 		inc.NextEscalationAt = nil
 		return s.incidents.Update(ctx, inc)
+	}
+
+	// A due acknowledged incident means the ack timed out: re-open it and keep
+	// climbing the escalation chain.
+	if inc.Status == model.IncidentAcknowledged {
+		inc.Status = model.IncidentTriggered
+		_ = s.incidents.AppendLog(ctx, &model.IncidentLogEntry{
+			IncidentID: inc.ID, Type: "escalate", Message: "Acknowledgement timed out — re-escalating",
+		})
 	}
 
 	if inc.EscalationLevel+1 < len(policy.Rules) {

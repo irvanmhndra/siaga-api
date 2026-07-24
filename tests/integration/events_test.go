@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -219,6 +220,60 @@ func TestEscalationEngine_Advances(t *testing.T) {
 	}
 	if final.Status != model.IncidentTriggered {
 		t.Errorf("exhausted policy: incident should still be triggered, got %q", final.Status)
+	}
+}
+
+func TestAckTimeout_ReEscalates(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t)
+	uid, orgID := e.register(t, ctx, "ops@example.com")
+	pol := userTargetPolicy(t, ctx, e, orgID, uid, 0, 0) // two levels
+
+	ackTimeout := 5
+	svc, err := e.services.Create(ctx, orgID, service.ServiceRequest{
+		Name: "Billing", EscalationPolicyID: &pol.ID, AckTimeoutMinutes: &ackTimeout,
+	})
+	if err != nil {
+		t.Fatalf("create service: %v", err)
+	}
+	res, err := e.incidents.ProcessEvent(ctx, triggerEvent(svc.IntegrationKey, "bill-1", "Billing down", "critical"))
+	if err != nil {
+		t.Fatalf("trigger: %v", err)
+	}
+	incID := res.IncidentID
+
+	// Acknowledge arms the ack-timeout deadline instead of clearing escalation.
+	acked, err := e.incidents.Acknowledge(ctx, incID, orgID, uid)
+	if err != nil {
+		t.Fatalf("acknowledge: %v", err)
+	}
+	if acked.Status != model.IncidentAcknowledged {
+		t.Fatalf("want acknowledged, got %q", acked.Status)
+	}
+	if acked.NextEscalationAt == nil {
+		t.Fatal("ack with a service ack_timeout should arm next_escalation_at")
+	}
+
+	// The engine picks it up once the deadline passes — simulate by escalating.
+	inc, _ := e.incidents.Get(ctx, incID, orgID)
+	if err := e.incidents.Escalate(ctx, inc); err != nil {
+		t.Fatalf("escalate: %v", err)
+	}
+	out, _ := e.incidents.Get(ctx, incID, orgID)
+	if out.Status != model.IncidentTriggered {
+		t.Errorf("after ack timeout: want re-triggered, got %q", out.Status)
+	}
+	if out.EscalationLevel != 1 {
+		t.Errorf("after ack timeout: want escalation to advance to level 1, got %d", out.EscalationLevel)
+	}
+	timedOut := false
+	for _, entry := range out.Log {
+		if strings.Contains(entry.Message, "timed out") {
+			timedOut = true
+		}
+	}
+	if !timedOut {
+		t.Error("expected a 'timed out' entry in the incident timeline")
 	}
 }
 

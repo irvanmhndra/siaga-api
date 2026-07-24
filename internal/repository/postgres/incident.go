@@ -99,9 +99,11 @@ func (r *incidentRepo) ListLog(ctx context.Context, incidentID string) ([]model.
 
 func (r *incidentRepo) ListDueForEscalation(ctx context.Context, now time.Time) ([]model.Incident, error) {
 	incidents := []model.Incident{}
+	// 'acknowledged' incidents with a due next_escalation_at are ack-timeouts.
 	err := r.db.SelectContext(ctx, &incidents,
 		`SELECT * FROM incidents
-		 WHERE status = 'triggered' AND next_escalation_at IS NOT NULL AND next_escalation_at <= $1
+		 WHERE status IN ('triggered', 'acknowledged')
+		   AND next_escalation_at IS NOT NULL AND next_escalation_at <= $1
 		 ORDER BY next_escalation_at`, now)
 	return incidents, err
 }
