@@ -8,6 +8,7 @@ import (
 
 	"github.com/irvanmhndra/siaga-api/config"
 	"github.com/irvanmhndra/siaga-api/internal/model"
+	"github.com/irvanmhndra/siaga-api/internal/repository"
 	"github.com/irvanmhndra/siaga-api/internal/repository/postgres"
 	"github.com/irvanmhndra/siaga-api/internal/service"
 )
@@ -220,6 +221,34 @@ func TestEscalationEngine_Advances(t *testing.T) {
 	}
 	if final.Status != model.IncidentTriggered {
 		t.Errorf("exhausted policy: incident should still be triggered, got %q", final.Status)
+	}
+}
+
+func TestMaintenance_SuppressesTriggers(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t)
+	uid, orgID := e.register(t, ctx, "ops@example.com")
+	pol := userTargetPolicy(t, ctx, e, orgID, uid, 30)
+
+	svc, err := e.services.Create(ctx, orgID, service.ServiceRequest{
+		Name: "Under Maintenance", Status: "maintenance", EscalationPolicyID: &pol.ID,
+	})
+	if err != nil {
+		t.Fatalf("create service: %v", err)
+	}
+	res, err := e.incidents.ProcessEvent(ctx, triggerEvent(svc.IntegrationKey, "m-1", "Noise", "critical"))
+	if err != nil {
+		t.Fatalf("trigger: %v", err)
+	}
+	if res.Status != "suppressed" {
+		t.Errorf("maintenance service: want suppressed, got %q", res.Status)
+	}
+	incidents, err := e.incidents.List(ctx, orgID, repository.IncidentFilter{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(incidents) != 0 {
+		t.Errorf("maintenance service should open no incidents, got %d", len(incidents))
 	}
 }
 

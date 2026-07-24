@@ -85,6 +85,10 @@ func (s *IncidentService) triggerFromEvent(ctx context.Context, svc *model.Servi
 	if dedup == "" {
 		dedup = uuid.NewString()
 	}
+	// A service under maintenance accepts events but suppresses new incidents.
+	if svc.Status == "maintenance" {
+		return &EventResult{Status: "suppressed", DedupKey: dedup}, nil
+	}
 
 	existing, err := s.incidents.FindOpenByDedup(ctx, svc.ID, dedup)
 	if err != nil {
