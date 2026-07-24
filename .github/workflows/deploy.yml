@@ -6,6 +6,20 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: siaga_test_user
+          POSTGRES_PASSWORD: siaga_test_pass
+          POSTGRES_DB: siaga_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U siaga_test_user -d siaga_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_DSN: postgres://siaga_test_user:siaga_test_pass@localhost:5432/siaga_test?sslmode=disable
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
