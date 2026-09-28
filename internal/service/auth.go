@@ -10,6 +10,7 @@ import (
 	"github.com/irvanmhndra/siaga-api/internal/model"
 	"github.com/irvanmhndra/siaga-api/internal/repository"
 	"github.com/irvanmhndra/siaga-api/pkg/apperror"
+	"github.com/irvanmhndra/siaga-api/pkg/sessiontoken"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -98,11 +99,11 @@ func (s *AuthService) Login(ctx context.Context, req LoginRequest) (*AuthRespons
 }
 
 func (s *AuthService) Logout(ctx context.Context, token string) error {
-	return s.sessionRepo.DeleteByToken(ctx, token)
+	return s.sessionRepo.DeleteByTokenHash(ctx, sessiontoken.Hash(token))
 }
 
 func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*AuthResponse, error) {
-	session, err := s.sessionRepo.FindByRefreshToken(ctx, refreshToken)
+	session, err := s.sessionRepo.FindByRefreshTokenHash(ctx, sessiontoken.Hash(refreshToken))
 	if err != nil {
 		return nil, err
 	}
@@ -113,12 +114,21 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*AuthRe
 	if err != nil || user == nil {
 		return nil, apperror.Unauthorized("user not found")
 	}
-	_ = s.sessionRepo.DeleteByToken(ctx, session.Token)
-	return s.createSession(ctx, user)
+	// Replace the old session with the new one atomically
+	next, resp := newSession(user)
+	rotated, err := s.sessionRepo.Rotate(ctx, session.ID, next)
+	if err != nil {
+		return nil, err
+	}
+	if !rotated {
+		// Another request exchanged this refresh token first.
+		return nil, apperror.TokenExpired()
+	}
+	return resp, nil
 }
 
 func (s *AuthService) ValidateToken(ctx context.Context, token string) (*model.User, error) {
-	session, err := s.sessionRepo.FindByToken(ctx, token)
+	session, err := s.sessionRepo.FindByTokenHash(ctx, sessiontoken.Hash(token))
 	if err != nil {
 		return nil, err
 	}
@@ -138,27 +148,28 @@ const (
 )
 
 func (s *AuthService) createSession(ctx context.Context, user *model.User) (*AuthResponse, error) {
-	token, err := randomHex(32)
-	if err != nil {
+	session, resp := newSession(user)
+	if err := s.sessionRepo.Create(ctx, session); err != nil {
 		return nil, err
 	}
-	refresh, err := randomHex(32)
-	if err != nil {
-		return nil, err
-	}
+	return resp, nil
+}
+
+// newSession issues fresh tokens: the response carries the raw tokens for the
+// client, the session row only their digests.
+func newSession(user *model.User) (*model.UserSession, *AuthResponse) {
+	token := sessiontoken.New()
+	refresh := sessiontoken.New()
 	now := time.Now()
 	session := &model.UserSession{
 		ID:               uuid.NewString(),
 		UserID:           user.ID,
-		Token:            token,
-		RefreshToken:     refresh,
+		TokenHash:        sessiontoken.Hash(token),
+		RefreshTokenHash: sessiontoken.Hash(refresh),
 		ExpiresAt:        now.Add(accessTokenTTL),
 		RefreshExpiresAt: now.Add(refreshTokenTTL),
 	}
-	if err := s.sessionRepo.Create(ctx, session); err != nil {
-		return nil, err
-	}
-	return &AuthResponse{AccessToken: token, RefreshToken: refresh, User: user}, nil
+	return session, &AuthResponse{AccessToken: token, RefreshToken: refresh, User: user}
 }
 
 func randomHex(n int) (string, error) {

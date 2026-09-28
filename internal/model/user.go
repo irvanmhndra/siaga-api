@@ -19,8 +19,8 @@ type User struct {
 type UserSession struct {
 	ID               string    `db:"id"`
 	UserID           string    `db:"user_id"`
-	Token            string    `db:"token"`
-	RefreshToken     string    `db:"refresh_token"`
+	TokenHash        string    `db:"token_hash"`         // sessiontoken.Hash; never the raw token
+	RefreshTokenHash string    `db:"refresh_token_hash"` // sessiontoken.Hash; never the raw token
 	ExpiresAt        time.Time `db:"expires_at"`
 	RefreshExpiresAt time.Time `db:"refresh_expires_at"`
 	CreatedAt        time.Time `db:"created_at"`

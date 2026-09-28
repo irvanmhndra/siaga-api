@@ -22,9 +22,13 @@ type UserRepository interface {
 
 type UserSessionRepository interface {
 	Create(ctx context.Context, s *model.UserSession) error
-	FindByToken(ctx context.Context, token string) (*model.UserSession, error)
-	FindByRefreshToken(ctx context.Context, refreshToken string) (*model.UserSession, error)
-	DeleteByToken(ctx context.Context, token string) error
+	FindByTokenHash(ctx context.Context, tokenHash string) (*model.UserSession, error)
+	FindByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (*model.UserSession, error)
+	DeleteByTokenHash(ctx context.Context, tokenHash string) error
+	// Rotate deletes the session oldID and creates next in one transaction.
+	// It returns false, creating nothing, when oldID is already gone, so a
+	// refresh token can be exchanged only once even under concurrent use.
+	Rotate(ctx context.Context, oldID string, next *model.UserSession) (bool, error)
 	DeleteByUserID(ctx context.Context, userID string) error
 }
 
