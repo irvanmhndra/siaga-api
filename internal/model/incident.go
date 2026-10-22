@@ -35,7 +35,7 @@ type Incident struct {
 	CreatedAt          time.Time       `db:"created_at" json:"created_at"`
 	UpdatedAt          time.Time       `db:"updated_at" json:"updated_at"`
 
-	Log []IncidentLogEntry `db:"-" json:"log,omitempty"`
+	Log []IncidentLogEntry `db:"-" json:"log,omitzero"`
 }
 
 // IncidentLogEntry is one timeline event (trigger, ack, resolve, escalate,

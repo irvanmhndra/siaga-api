@@ -9,7 +9,7 @@ type Team struct {
 	CreatedAt      time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt      time.Time `db:"updated_at" json:"updated_at"`
 
-	Members []User `db:"-" json:"members,omitempty"`
+	Members []User `db:"-" json:"members,omitzero"`
 }
 
 type TeamMember struct {

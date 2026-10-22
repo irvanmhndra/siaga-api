@@ -16,8 +16,8 @@ type Schedule struct {
 	CreatedAt      time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt      time.Time `db:"updated_at" json:"updated_at"`
 
-	Layers    []ScheduleLayer    `db:"-" json:"layers,omitempty"`
-	Overrides []ScheduleOverride `db:"-" json:"overrides,omitempty"`
+	Layers    []ScheduleLayer    `db:"-" json:"layers,omitzero"`
+	Overrides []ScheduleOverride `db:"-" json:"overrides,omitzero"`
 }
 
 // ScheduleLayer is one rotation ring. user_ids rotate every
