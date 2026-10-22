@@ -19,7 +19,7 @@ type EscalationPolicy struct {
 	CreatedAt      time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt      time.Time `db:"updated_at" json:"updated_at"`
 
-	Rules []EscalationRule `db:"-" json:"rules,omitempty"`
+	Rules []EscalationRule `db:"-" json:"rules,omitzero"`
 }
 
 // EscalationRule fires its targets, then waits DelayMinutes before the next rule.
@@ -30,7 +30,7 @@ type EscalationRule struct {
 	DelayMinutes       int       `db:"delay_minutes" json:"delay_minutes"`
 	CreatedAt          time.Time `db:"created_at" json:"created_at"`
 
-	Targets []EscalationTarget `db:"-" json:"targets,omitempty"`
+	Targets []EscalationTarget `db:"-" json:"targets,omitzero"`
 }
 
 // EscalationTarget points a rule at either a user directly or an on-call schedule.

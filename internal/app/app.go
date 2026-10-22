@@ -178,3 +178,6 @@ func customHTTPErrorHandler(c *echo.Context, err error) {
 	slog.Error("unhandled error", "method", c.Request().Method, "path", c.Request().URL.Path, "error", err)
 	_ = c.JSON(http.StatusInternalServerError, httputil.Response{Success: false, Message: "internal server error", ErrorCode: "INTERNAL_ERROR"})
 }
+
+// Echo exposes the configured router so tests can serve requests in-process.
+func (a *App) Echo() *echo.Echo { return a.echo }

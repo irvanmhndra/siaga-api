@@ -20,6 +20,7 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       TEST_DATABASE_DSN: postgres://siaga_test_user:siaga_test_pass@localhost:5432/siaga_test?sslmode=disable
+      TEST_DATABASE_URL: postgres://siaga_test_user:siaga_test_pass@localhost:5432/postgres?sslmode=disable
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
